@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BATTLE PEAKS - Family Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #0a0a0f; 
+            font-family: 'Inter', sans-serif; 
+            touch-action: none; 
+            color: white; 
+        }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        .ui-overlay { pointer-events: none; position: absolute; inset: 0; padding: 30px; }
+        .interactive { pointer-events: auto; }
+        
+        .glass {
+            background: rgba(15, 15, 25, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .gemini-gradient {
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .key-cap {
+            background: #2d2d3d;
+            border-bottom: 3px solid #1a1a25;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 0.8rem;
+            color: #fff;
+        }
+
+        #landing-bg {
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), 
+                        url('https://images.unsplash.com/photo-1506318137071-a8e063b49999?auto=format&fit=crop&q=80&w=2000');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .tank-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        /* Victory animation keyframes */
+        @keyframes crown-bounce {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        .victory-crown { animation: crown-bounce 2s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. Landing & Setup Screen -->
+    <div id="landing-screen" class="fixed inset-0 z-50 flex items-center justify-center p-6" style="background: #0a0a0f;">
+        <div id="landing-bg" class="absolute inset-0 opacity-40"></div>
+        
+        <div class="relative glass p-10 rounded-3xl max-w-2xl w-full shadow-2xl border-white/20 text-center">
+            <div id="setup-step-1">
+                <h1 class="text-6xl font-black mb-2 tracking-tighter italic">BATTLE <span class="text-blue-500">PEAKS</span></h1>
+                <p class="text-zinc-400 mb-10 uppercase tracking-[0.2em] text-xs font-bold">Mountain Mayhem Edition</p>
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xs uppercase font-bold tracking-widest text-zinc-500 mb-3">Number of Commanders</label>
+                        <div class="flex justify-center gap-4">
+                            <input type="range" id="player-count-slider" min="2" max="10" value="2" class="interactive w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                            <span id="player-count-display" class="text-2xl font-black w-12 text-center">2</span>
+                        </div>
+                    </div>
+                    
+                    <button id="proceed-to-names" class="interactive w-full bg-white text-black font-black py-4 rounded-xl hover:bg-blue-400 transition-all transform hover:scale-[1.02] active:scale-95">
+                        INITIALIZE BATTALION
+                    </button>
+                </div>
+            </div>
+
+            <div id="setup-step-2" class="hidden">
+                <h2 class="text-2xl font-bold mb-6">Name Your Commanders</h2>
+                <div id="name-inputs-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[40vh] overflow-y-auto mb-8 pr-2"></div>
+                <div class="flex gap-4">
+                    <button id="back-to-count" class="interactive flex-1 bg-zinc-800 text-white font-bold py-4 rounded-xl">BACK</button>
+                    <button id="start-game-btn" class="interactive flex-1 bg-blue-600 text-white font-black py-4 rounded-xl hover:bg-blue-500 shadow-lg shadow-blue-500/20">
+                        BATTLE START
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Game HUD -->
+    <div id="game-ui" class="ui-overlay hidden">
+        <div class="flex justify-between items-start">
+            <div class="glass p-5 rounded-2xl w-64">
+                <h3 class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Command Center</h3>
+                <div id="leaderboard-list" class="space-y-3"></div>
+            </div>
+
+            <div class="text-right space-y-4">
+                <div class="glass p-5 rounded-2xl">
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Active Turn</p>
+                    <h2 id="active-player-name" class="text-3xl font-black tracking-tighter">--</h2>
+                    <div id="active-player-color" class="h-1 w-full mt-2 rounded-full"></div>
+                </div>
+
+                <div class="glass p-4 rounded-xl text-left space-y-2">
+                    <p class="text-[10px] font-bold text-zinc-500 uppercase">Controls</p>
+                    <div class="text-xs text-zinc-400 flex justify-between">
+                        <span>Angle</span>
+                        <span><span class="key-cap">←</span> <span class="key-cap">↑</span> <span class="key-cap">→</span></span>
+                    </div>
+                    <div class="text-xs text-zinc-400 flex justify-between">
+                        <span>Power</span>
+                        <span><span class="key-cap">U</span> <span class="key-cap">D</span></span>
+                    </div>
+                    <div class="text-xs text-zinc-400 flex justify-between">
+                        <span>Fire</span>
+                        <span><span class="key-cap">SPACE</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-10">
+            <div class="text-center">
+                <p class="text-[10px] font-bold text-zinc-500 uppercase mb-1">Angle</p>
+                <p id="hud-angle" class="text-4xl font-black italic">45°</p>
+            </div>
+            <div class="text-center">
+                <p class="text-[10px] font-bold text-zinc-500 uppercase mb-1">Power</p>
+                <p id="hud-power" class="text-4xl font-black italic">50</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Victory Overlay -->
+    <div id="victory-screen" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 hidden">
+        <div class="text-center">
+            <div class="text-8xl mb-6 victory-crown">👑</div>
+            <h1 class="text-7xl font-black mb-2 tracking-tighter gemini-gradient">SUPREME COMMANDER</h1>
+            <p id="winner-name" class="text-3xl font-bold text-white mb-10">Commander Wins!</p>
+            <button onclick="location.reload()" class="interactive bg-white text-black font-black px-10 py-4 rounded-2xl hover:bg-blue-400 transition-colors">NEW BATTLE</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script type="module">
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // --- Sound Engine (Web Audio API) ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const SFX = {
+            fire: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            },
+            sandHit: () => {
+                const noise = audioCtx.createBufferSource();
+                const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.5, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < buffer.length; i++) data[i] = Math.random() * 2 - 1;
+                noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(400, audioCtx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.4);
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                noise.start();
+            },
+            tankHit: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+                SFX.sandHit();
+            },
+            victory: () => {
+                const notes = [440, 554, 659, 880];
+                notes.forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + i * 0.15);
+                    gain.gain.setValueAtTime(0, audioCtx.currentTime + i * 0.15);
+                    gain.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + i * 0.15 + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.15 + 0.4);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.start(audioCtx.currentTime + i * 0.15);
+                    osc.stop(audioCtx.currentTime + i * 0.15 + 0.5);
+                });
+            }
+        };
+
+        // --- Game State ---
+        let players = [];
+        let terrain = [];
+        let projectiles = [];
+        let particles = [];
+        let currentPlayerIndex = 0;
+        let gameState = 'landing'; 
+        let isAnimatingShot = false;
+        let lastVictoryParticleTime = 0;
+
+        const GRAVITY = 0.2;
+        const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#a855f7', '#14b8a6'];
+
+        // --- Controls State ---
+        let currentAngle = 45;
+        let currentPower = 50;
+        const keys = {};
+
+        // --- UI Logic ---
+        const playerCountSlider = document.getElementById('player-count-slider');
+        const playerCountDisplay = document.getElementById('player-count-display');
+        const nameInputsContainer = document.getElementById('name-inputs-container');
+        
+        playerCountSlider.oninput = () => playerCountDisplay.innerText = playerCountSlider.value;
+
+        document.getElementById('proceed-to-names').onclick = () => {
+            initAudio();
+            const count = parseInt(playerCountSlider.value);
+            nameInputsContainer.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                nameInputsContainer.innerHTML += `
+                    <div class="flex items-center gap-3 bg-zinc-800/50 p-3 rounded-xl border border-white/5">
+                        <div class="w-4 h-4 rounded-full" style="background: ${COLORS[i % COLORS.length]}"></div>
+                        <input type="text" placeholder="Commander ${i+1}" maxlength="12" class="commander-name-input bg-transparent border-none focus:ring-0 text-white w-full outline-none" value="Player ${i+1}">
+                    </div>
+                `;
+            }
+            document.getElementById('setup-step-1').classList.add('hidden');
+            document.getElementById('setup-step-2').classList.remove('hidden');
+        };
+
+        document.getElementById('back-to-count').onclick = () => {
+            document.getElementById('setup-step-2').classList.add('hidden');
+            document.getElementById('setup-step-1').classList.remove('hidden');
+        };
+
+        document.getElementById('start-game-btn').onclick = () => {
+            const inputs = document.querySelectorAll('.commander-name-input');
+            players = Array.from(inputs).map((input, i) => ({
+                name: input.value.trim() || `Player ${i+1}`,
+                color: COLORS[i % COLORS.length],
+                hp: 100, x: 0, y: 0, isDead: false, score: 0
+            }));
+            initGame();
+        };
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (gameState === 'playing') generateTerrain();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function generateTerrain() {
+            terrain = [];
+            const mid = canvas.height * 0.7;
+            let h = mid;
+            for (let i = 0; i <= canvas.width; i++) {
+                h += (Math.random() - 0.5) * 5;
+                let wave = Math.sin(i * 0.01) * 30 + Math.sin(i * 0.005) * 60;
+                terrain[i] = h + wave;
+            }
+        }
+
+        function initGame() {
+            gameState = 'playing';
+            document.getElementById('landing-screen').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            generateTerrain();
+            const padding = 100;
+            const space = (canvas.width - padding * 2) / (players.length - 1);
+            players.forEach((p, i) => {
+                p.x = padding + i * space;
+                p.y = terrain[Math.floor(p.x)];
+            });
+            currentPlayerIndex = 0;
+            const center = canvas.width / 2;
+            currentAngle = players[currentPlayerIndex].x < center ? 45 : 135;
+            currentPower = 50;
+            updateHUD();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function handleInput() {
+            if (isAnimatingShot || gameState !== 'playing') return;
+            if (keys['ArrowLeft']) currentAngle += 1;
+            if (keys['ArrowRight']) currentAngle -= 1;
+            if (keys['ArrowUp']) currentAngle += 1.5;
+            if (keys['KeyU']) currentPower = Math.min(100, currentPower + 0.5);
+            if (keys['KeyD']) currentPower = Math.max(5, currentPower - 0.5);
+            if (currentAngle > 180) currentAngle = 180;
+            if (currentAngle < 0) currentAngle = 0;
+            if (keys['Space']) { fire(); keys['Space'] = false; }
+            updateHUD();
+        }
+
+        function fire() {
+            if (isAnimatingShot) return;
+            SFX.fire();
+            const p = players[currentPlayerIndex];
+            const rad = (currentAngle * Math.PI) / 180;
+            projectiles.push({
+                x: p.x + Math.cos(rad) * 30,
+                y: p.y - 15 - Math.sin(rad) * 30,
+                vx: Math.cos(rad) * (currentPower / 4),
+                vy: -Math.sin(rad) * (currentPower / 4),
+                ownerIndex: currentPlayerIndex, color: p.color
+            });
+            isAnimatingShot = true;
+        }
+
+        function nextTurn() {
+            isAnimatingShot = false;
+            let attempts = 0;
+            do {
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+                attempts++;
+            } while (players[currentPlayerIndex].isDead && attempts < players.length);
+            
+            const alive = players.filter(p => !p.isDead);
+            if (alive.length <= 1) {
+                gameState = 'gameover';
+                SFX.victory();
+                document.getElementById('victory-screen').classList.remove('hidden');
+                document.getElementById('winner-name').innerText = `${alive[0]?.name.toUpperCase() || "NO ONE"} IS THE SUPREME COMMANDER!`;
+                return;
+            }
+            const center = canvas.width / 2;
+            currentAngle = players[currentPlayerIndex].x < center ? 45 : 135;
+            updateHUD();
+        }
+
+        function updatePhysics() {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.vy += GRAVITY; p.x += p.vx; p.y += p.vy;
+                const tx = Math.floor(p.x);
+                if (tx >= 0 && tx < terrain.length && p.y >= terrain[tx]) {
+                    let hitSomething = false;
+                    players.forEach((tank, idx) => {
+                        if (tank.isDead) return;
+                        const dist = Math.hypot(tank.x - p.x, tank.y - p.y);
+                        if (dist < 60) {
+                            hitSomething = true;
+                            const dmg = Math.floor(70 - dist);
+                            tank.hp = Math.max(0, tank.hp - dmg);
+                            if (idx !== p.ownerIndex) players[p.ownerIndex].score += dmg;
+                            if (tank.hp <= 0) { tank.isDead = true; createExplosion(tank.x, tank.y, tank.color, 50); }
+                        }
+                    });
+                    if (hitSomething) SFX.tankHit(); else SFX.sandHit();
+                    destroyTerrain(p.x, p.y, 40);
+                    createExplosion(p.x, p.y, '#ff9900', 30);
+                    projectiles.splice(i, 1);
+                    setTimeout(nextTurn, 1000);
+                    continue;
+                }
+                if (p.x < 0 || p.x > canvas.width || p.y > canvas.height) { projectiles.splice(i, 1); nextTurn(); }
+            }
+            
+            if (gameState === 'gameover' && Date.now() - lastVictoryParticleTime > 300) {
+                const rx = Math.random() * canvas.width;
+                const ry = Math.random() * canvas.height * 0.6;
+                createExplosion(rx, ry, COLORS[Math.floor(Math.random()*COLORS.length)], 40);
+                lastVictoryParticleTime = Date.now();
+            }
+
+            players.forEach(tank => {
+                if (tank.isDead) return;
+                const tx = Math.floor(tank.x);
+                if (tx >= 0 && tx < terrain.length) {
+                    const targetY = terrain[tx];
+                    if (tank.y < targetY) { tank.y += 3; if (tank.y > targetY) tank.y = targetY; }
+                }
+            });
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const part = particles[i];
+                part.x += part.vx; part.y += part.vy; part.life -= 0.02;
+                if (part.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function destroyTerrain(x, y, radius) {
+            const startX = Math.max(0, Math.floor(x - radius));
+            const endX = Math.min(terrain.length - 1, Math.ceil(x + radius));
+            for (let i = startX; i <= endX; i++) {
+                const dx = i - x;
+                const dy = Math.sqrt(Math.max(0, radius * radius - dx * dx));
+                if (y + dy > terrain[i]) terrain[i] = Math.max(terrain[i], y + dy);
+            }
+        }
+
+        function createExplosion(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x, y, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10,
+                    life: 1.0, color, size: Math.random() * 5 + 2
+                });
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            sky.addColorStop(0, '#0a0a14'); sky.addColorStop(1, '#1a1a2e');
+            ctx.fillStyle = sky; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#c2a47d'; ctx.beginPath(); ctx.moveTo(0, canvas.height);
+            for (let i = 0; i < terrain.length; i++) ctx.lineTo(i, terrain[i]);
+            ctx.lineTo(canvas.width, canvas.height); ctx.fill();
+            
+            players.forEach((p, idx) => {
+                if (p.isDead) return;
+                ctx.save(); ctx.translate(p.x, p.y);
+                if (idx === currentPlayerIndex && !isAnimatingShot && gameState !== 'gameover') {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.setLineDash([5, 5]); ctx.beginPath(); ctx.arc(0, -15, 40, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+                }
+                ctx.fillStyle = p.color; ctx.beginPath(); ctx.roundRect(-18, -12, 36, 12, 4); ctx.fill(); ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(0, -12, 10, 0, Math.PI, true); ctx.fill(); ctx.stroke();
+                if (idx === currentPlayerIndex && gameState !== 'gameover') {
+                    const rad = (currentAngle * Math.PI) / 180;
+                    ctx.strokeStyle = 'white'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(Math.cos(rad) * 25, -15 - Math.sin(rad) * 25); ctx.stroke();
+                }
+                ctx.restore();
+                ctx.fillStyle = 'white'; ctx.font = 'bold 10px Inter'; ctx.textAlign = 'center'; ctx.fillText(p.name.toUpperCase(), p.x, p.y - 45);
+                ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(p.x - 20, p.y - 40, 40, 4);
+                ctx.fillStyle = p.hp > 30 ? p.color : '#ff4444'; ctx.fillRect(p.x - 20, p.y - 40, 40 * (p.hp / 100), 4);
+            });
+            projectiles.forEach(p => {
+                ctx.fillStyle = 'white'; ctx.shadowBlur = 15; ctx.shadowColor = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+            });
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        function updateHUD() {
+            const p = players[currentPlayerIndex]; if (!p) return;
+            document.getElementById('active-player-name').innerText = p.name.toUpperCase();
+            document.getElementById('active-player-color').style.background = p.color;
+            document.getElementById('hud-angle').innerText = `${Math.round(currentAngle)}°`;
+            document.getElementById('hud-power').innerText = Math.round(currentPower);
+            document.getElementById('leaderboard-list').innerHTML = players.map(player => `
+                <div class="flex justify-between items-center ${player.isDead ? 'opacity-30 grayscale' : ''}">
+                    <div class="flex items-center"><span class="tank-indicator" style="background: ${player.color}"></span><span class="text-sm font-bold truncate w-24">${player.name}</span></div>
+                    <span class="text-xs font-mono">${player.score}</span>
+                </div>`).join('');
+        }
+
+        function gameLoop() {
+            handleInput(); updatePhysics(); draw();
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
